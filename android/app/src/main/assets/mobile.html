@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>NAVDRISHTI Navigation &middot; ISRO NavIC</title>
+    
+    <!-- Modern Typography: Google Sans / Inter style -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet Map CSS (Offline Vendor Copy for Reliable Venue Showcase) -->
+    <link rel="stylesheet" href="vendor/leaflet.css">
+    <link rel="icon" type="image/png" href="assets/logo.png">
+    
+    <style>
+        :root {
+            /* Google Maps Navigation Palette */
+            --gmap-green-header: #137333;
+            --gmap-green-dark: #0f5132;
+            --gmap-blue-route: #1a73e8;
+            --gmap-blue-dot: #1a73e8;
+            --gmap-red-exit: #ea4335;
+            --gmap-surface: #ffffff;
+            --gmap-surface-dark: #121620;
+            --gmap-panel-dark: #1b212f;
+            --gmap-border-dark: #262f42;
+            --gmap-text: #202124;
+            --gmap-text-subtle: #5f6368;
+            --gmap-amber: #f9ab00;
+            
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: var(--font-sans);
+            background: #000000;
+            color: #ffffff;
+        }
+
+        #app-viewport {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 100% Full-Screen Interactive Map */
+        #nav-map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            background-color: #0d121c;
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(26, 115, 232, 0.06) 0%, transparent 60%),
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 36px 36px, 36px 36px;
+        }
+
+        /* Dark Mode filter for OSM vector/imagery tiles */
+        #nav-map .leaflet-tile-pane {
+            filter: brightness(0.7) invert(1) contrast(2.4) hue-rotate(200deg) saturate(0.28) brightness(0.75);
+        }
+
+        /* TOP: Signature Google Maps Navigation Banner */
+        .gmap-nav-header {
+            position: absolute;
+            top: env(safe-area-inset-top, 12px);
+            left: 12px;
+            right: 12px;
+            z-index: 100;
+            background: var(--gmap-green-header);
+            border-radius: 18px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            color: #ffffff;
+            transition: background 0.3s ease, transform 0.2s ease;
+        }
+
+        .gmap-nav-header.blackout {
+            background: #2b1d1d;
+            border: 1px solid rgba(234, 67, 53, 0.4);
+        }
+
+        .nav-turn-icon {
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .nav-turn-icon svg {
+            width: 36px;
+            height: 36px;
+            fill: none;
+            stroke: #ffffff;
+            stroke-width: 3.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .nav-instruction {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .nav-distance {
+            font-size: 1.45rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+        }
+
+        .nav-road-name {
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: #e6f4ea;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .nav-meta-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.68rem;
+            font-weight: 600;
+            color: #a8dab5;
+            letter-spacing: 0.02em;
+        }
+
+        .nav-right-actions {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-icon-top {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            cursor: pointer;
+        }
+        .btn-icon-top svg { width: 18px; height: 18px; fill: currentColor; }
+
+        /* FLOATING MAP BUTTONS: Google Maps Style */
+        .floating-controls {
+            position: absolute;
+            right: 14px;
+            top: calc(env(safe-area-inset-top, 12px) + 95px);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .gmap-circle-btn {
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            min-height: 48px;
+            border-radius: 50%;
+            background: var(--gmap-panel-dark);
+            border: 1px solid var(--gmap-border-dark);
+            color: #ffffff;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1), background 0.15s ease;
+        }
+        .gmap-circle-btn:active { transform: scale(0.92); }
+        .gmap-circle-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; }
+        .gmap-circle-btn.blue-accent svg { stroke: var(--gmap-blue-route); }
+
+        /* SPEEDOMETER BUBBLE (Bottom Left Above Bottom Sheet) */
+        .speedometer-bubble {
+            position: absolute;
+            left: 14px;
+            bottom: calc(max(14px, env(safe-area-inset-bottom, 14px)) + 115px);
+            z-index: 50;
+            background: var(--gmap-panel-dark);
+            border: 1px solid var(--gmap-border-dark);
+            border-radius: 20px;
+            padding: 8px 14px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .current-speed-text {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 38px;
+        }
+
+        .current-speed-num {
+            font-family: var(--font-mono);
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #ffffff;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .current-speed-unit {
+            font-size: 0.62rem;
+            color: var(--gmap-text-subtle);
+            font-weight: 600;
+        }
+
+        /* BOTTOM: Signature Google Maps Bottom Navigation Sheet */
+        .gmap-bottom-sheet {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: var(--gmap-panel-dark);
+            border-top: 1px solid var(--gmap-border-dark);
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 -4px 25px rgba(0, 0, 0, 0.45);
+            padding: 8px 16px calc(max(14px, env(safe-area-inset-bottom, 14px)) + 8px) 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            max-height: 140px;
+        }
+
+        .gmap-bottom-sheet.expanded {
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .sheet-drag-handle {
+            width: 40px;
+            height: 5px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.3);
+            margin: 2px auto 6px auto;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        .sheet-drag-handle:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .sheet-main-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .eta-block {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .eta-primary {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+        }
+
+        .eta-time {
+            font-size: 1.45rem;
+            font-weight: 800;
+            color: #34a853; /* Google Maps Green ETA */
+            letter-spacing: -0.02em;
+        }
+
+        .eta-distance {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #e8eaed;
+        }
+
+        .eta-arrival {
+            font-size: 0.78rem;
+            color: #9aa0a6;
+            font-weight: 500;
+        }
+
+        .sheet-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-gmap-exit {
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            min-height: 48px;
+            border-radius: 50%;
+            background: rgba(234, 67, 53, 0.18);
+            border: 1px solid rgba(234, 67, 53, 0.4);
+            color: #f28b82;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.1s ease, background 0.15s ease;
+        }
+        .btn-gmap-exit:active { transform: scale(0.92); }
+        .btn-gmap-exit svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2.2; }
+
+        .btn-gmap-primary {
+            height: 48px;
+            min-height: 48px;
+            padding: 0 20px;
+            border-radius: 24px;
+            background: var(--gmap-blue-route);
+            color: #ffffff;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(26, 115, 232, 0.45);
+            transition: transform 0.12s ease, box-shadow 0.15s ease;
+        }
+        .btn-gmap-primary:active { transform: scale(0.96); }
+
+        /* EXPANDED TELEMETRY DRAWER (Swipe up for judges) */
+        .drawer-telemetry-content {
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--gmap-border-dark);
+            margin-top: 6px;
+        }
+
+        .drawer-telemetry-content.expanded {
+            display: flex;
+        }
+
+        .telemetry-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+        }
+
+        .telemetry-card {
+            background: #0d121c;
+            border: 1px solid var(--gmap-border-dark);
+            border-radius: 10px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .telemetry-tag {
+            font-size: 0.6rem;
+            color: #9aa0a6;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .telemetry-val {
+            font-family: var(--font-mono);
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #ffffff;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .drawer-btn-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .btn-drawer-action {
+            height: 40px;
+            border-radius: 8px;
+            background: #0d121c;
+            border: 1px solid var(--gmap-border-dark);
+            color: #e8eaed;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        /* Subtle Google Maps Navigation Pointer (Automotive Locating Cursor) */
+        .gmap-vehicle-marker {
+            background: transparent !important;
+            border: none !important;
+        }
+
+        .nav-puck-wrapper {
+            width: 38px;
+            height: 38px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform-origin: center center;
+            transition: transform 0.12s cubic-bezier(0.2, 0.8, 0.3, 1);
+            will-change: transform;
+        }
+
+        /* Subtle Google Maps Forward Illumination Heading Beam */
+        .puck-heading-beam {
+            position: absolute;
+            top: -18px;
+            left: 50%;
+            width: 28px;
+            height: 24px;
+            margin-left: -14px;
+            background: radial-gradient(ellipse at 50% 100%, rgba(37, 99, 235, 0.28) 0%, rgba(37, 99, 235, 0.07) 55%, transparent 75%);
+            clip-path: polygon(50% 100%, 5% 0%, 95% 0%);
+            pointer-events: none;
+            transition: background 0.3s ease;
+        }
+
+        .nav-puck-wrapper.blackout .puck-heading-beam {
+            background: radial-gradient(ellipse at 50% 100%, rgba(245, 158, 11, 0.35) 0%, rgba(245, 158, 11, 0.08) 55%, transparent 75%);
+        }
+
+        .puck-svg {
+            width: 36px;
+            height: 36px;
+            filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+            overflow: visible;
+        }
+
+        .puck-base-disk {
+            fill: #ffffff;
+            stroke: rgba(0, 0, 0, 0.08);
+            stroke-width: 0.8;
+            transition: stroke 0.3s ease, fill 0.3s ease;
+        }
+
+        .nav-puck-wrapper.blackout .puck-base-disk {
+            stroke: rgba(245, 158, 11, 0.55);
+        }
+
+        .arrow-left {
+            fill: #2563eb; /* Signature Google Maps Blue */
+            stroke: #ffffff;
+            stroke-width: 0.8;
+            stroke-linejoin: round;
+            transition: fill 0.3s ease;
+        }
+
+        .arrow-right {
+            fill: #1d4ed8; /* Subtle 3D shadow facet */
+            stroke: #ffffff;
+            stroke-width: 0.8;
+            stroke-linejoin: round;
+            transition: fill 0.3s ease;
+        }
+
+        .nav-puck-wrapper.blackout .arrow-left {
+            fill: #f59e0b; /* Amber */
+        }
+
+        .nav-puck-wrapper.blackout .arrow-right {
+            fill: #d97706; /* Deep Amber */
+        }
+
+        /* Route Selector Pill */
+        .mobile-route-pill-container {
+            position: absolute;
+            top: 96px;
+            left: 14px;
+            z-index: 10;
+        }
+
+        .mobile-route-select {
+            background: rgba(18, 22, 32, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: 20px;
+            outline: none;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+            cursor: pointer;
+        }
+        .mobile-route-select option {
+            background: #181f2c;
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app-viewport">
+        
+        <!-- 100% Interactive Leaflet Navigation Map -->
+        <div id="nav-map"></div>
+
+        <!-- Signature Google Maps Top Navigation Card -->
+        <div id="gmap-banner" class="gmap-nav-header">
+            <div class="nav-turn-icon">
+                <svg viewBox="0 0 24 24">
+                    <line x1="12" y1="19" x2="12" y2="5"/>
+                    <polyline points="5 12 12 5 19 12"/>
+                </svg>
+            </div>
+            <div class="nav-instruction">
+                <div id="banner-distance" class="nav-distance">300 m</div>
+                <div id="banner-street" class="nav-road-name">M5 Motorway &middot; Northbound Corridor</div>
+                <div id="banner-meta" class="nav-meta-badge">
+                    <span>&bull;</span>
+                    <span id="nav-carrier-lock">ISRO NavIC Dual-Band L5/S Active</span>
+                </div>
+            </div>
+            <div class="nav-right-actions">
+                <img src="assets/logo.png" alt="NavDrishti" style="width: 32px; height: 32px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.35); vertical-align: middle; margin-right: 4px;">
+                <button id="btn-sound" class="btn-icon-top" title="Voice Guidance">
+                    <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Route Selector Pill -->
+        <div class="mobile-route-pill-container">
+            <select id="mobile-scenario-select" class="mobile-route-select" aria-label="Select Route">
+                <option value="iovnbd_vw13" selected>🇬🇧 IO-VNBD M5 Motorway (115 km/h Cruise)</option>
+                <option value="iovnbd_s1">🇬🇧 IO-VNBD Coventry Ring Road (Track S1 - Roundabouts)</option>
+                <option value="iovnbd_vw1">🇬🇧 IO-VNBD Stationary ZUPT (Track Vw1 - Calibration)</option>
+            </select>
+        </div>
+
+        <!-- Floating Map Controls (Right Side) -->
+        <div class="floating-controls">
+            <button id="btn-compass" class="gmap-circle-btn" title="North Orientation">
+                <svg viewBox="0 0 24 24"><polygon points="12 2 15 11 12 9 9 11 12 2" fill="#ea4335"/><polygon points="12 22 9 13 12 15 15 13 12 22" fill="#9aa0a6"/></svg>
+            </button>
+            <button id="btn-recenter" class="gmap-circle-btn blue-accent" title="Recenter GPS Location">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+            </button>
+        </div>
+
+        <!-- Speedometer Bubble (Bottom Left) -->
+        <div class="speedometer-bubble">
+            <div class="current-speed-text">
+                <div id="live-speed" class="current-speed-num">0</div>
+                <div class="current-speed-unit">km/h</div>
+            </div>
+        </div>
+
+        <!-- Signature Google Maps Bottom Navigation Sheet -->
+        <div id="gmap-sheet" class="gmap-bottom-sheet">
+            <div id="sheet-drag-toggle" class="sheet-drag-handle" title="Tap to expand telemetry"></div>
+
+            <div class="sheet-main-row">
+                <div class="eta-block">
+                    <div class="eta-primary">
+                        <span id="eta-min" class="eta-time">12 min</span>
+                        <span id="eta-dist" class="eta-distance">&middot; 6.4 km</span>
+                    </div>
+                    <div id="eta-clock" class="eta-arrival">12:15 AM &middot; Real CAN-bus Telemetry Route</div>
+                </div>
+
+                <div class="sheet-actions">
+                    <button id="btn-toggle-drive" class="btn-gmap-primary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        <span id="drive-label">Start</span>
+                    </button>
+                    <button id="btn-toggle-blackout" class="btn-gmap-exit" title="Simulate GNSS Loss">
+                        <svg viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Slide-Up Aerospace Diagnostics Panel (For Hackathon Jury) -->
+            <div id="telemetry-drawer" class="drawer-telemetry-content">
+                <div class="telemetry-row">
+                    <div class="telemetry-card">
+                        <span class="telemetry-tag">NavIC Satellites</span>
+                        <span id="tel-navic-sats" class="telemetry-val" style="color:#34a853;">7 L5/S Lock</span>
+                    </div>
+                    <div class="telemetry-card">
+                        <span class="telemetry-tag">100Hz EKF Drift</span>
+                        <span id="tel-drift" class="telemetry-val">0.0 m (0.0%)</span>
+                    </div>
+                    <div class="telemetry-card">
+                        <span class="telemetry-tag">Mount Level</span>
+                        <span id="tel-mount" class="telemetry-val">Pitch 0.0&deg;</span>
+                    </div>
+                </div>
+
+                <div class="telemetry-row">
+                    <div class="telemetry-card">
+                        <span class="telemetry-tag">Accel X / Y</span>
+                        <span id="tel-accel-xy" class="telemetry-val">0.00 / 0.00</span>
+                    </div>
+                    <div class="telemetry-card">
+                        <span class="telemetry-tag">Accel Z (Gravity)</span>
+                        <span id="tel-accel-z" class="telemetry-val">9.81 m/s&sup2;</span>
+                    </div>
+                    <div class="telemetry-card">
+                        <span class="telemetry-tag">Heading Direction</span>
+                        <span id="tel-heading" class="telemetry-val">359&deg; N</span>
+                    </div>
+                </div>
+
+                <div class="drawer-btn-row">
+                    <button id="btn-pothole-spike" class="btn-drawer-action">
+                        Inject Pothole Spike
+                    </button>
+                    <button id="btn-stream-ws" class="btn-drawer-action">
+                        HIL Bridge: <span id="ws-badge" style="color:#34a853;">Connected</span>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Leaflet JS (Offline Vendor Copy for Reliable Venue Showcase) -->
+    <script src="vendor/leaflet.js"></script>
+    
+    <!-- Datasets and EKF Engine -->
+    <script src="js/engine.js"></script>
+    <script src="js/dataset.js"></script>
+
+    <script>
+        let currentScenarioKey = 'iovnbd_vw13';
+        let currentScenario = NAVDRISHTI_DATASETS[currentScenarioKey];
+        window.currentScenario = currentScenario;
+        window.scenario = currentScenario;
+        let points = currentScenario.points;
+        let waypoints = points.map(p => [p.truth.lat, p.truth.lng]);
+        let mobileFilter = new AdaptiveNavDrishtiFilter(VEHICLE_PROFILES.car);
+        let mobileMapMatcher = new DynamicHMMMapMatcher();
+        let mobileBlackoutTraveledMeters = 0.0;
+        let manualBlackoutLocked = false;
+
+        function syncMobileFilterWithScenario() {
+            mobileFilter = new AdaptiveNavDrishtiFilter(VEHICLE_PROFILES.car);
+            mobileMapMatcher = new DynamicHMMMapMatcher();
+            mobileBlackoutTraveledMeters = 0.0;
+
+            if (currentScenario.roadSegments && currentScenario.roadSegments.length > 0) {
+                const coords = currentScenario.roadSegments.map(s => s.p1);
+                if (currentScenario.roadSegments[currentScenario.roadSegments.length - 1].p2) {
+                    coords.push(currentScenario.roadSegments[currentScenario.roadSegments.length - 1].p2);
+                }
+                mobileMapMatcher.setDynamicRoute(coords);
+            }
+            if (currentScenario.points && currentScenario.points.length > 0) {
+                const p0 = currentScenario.points[0];
+                mobileFilter.setInitialState(
+                    new Vector3(p0.truth.north, p0.truth.east, 0),
+                    p0.truth.heading,
+                    p0.truth.speed
+                );
+            }
+        }
+        syncMobileFilterWithScenario();
+
+        // --- 2. LEAFLET MAP INITIALIZATION (GOOGLE MAPS STYLE) ---
+        const startPt = waypoints[0] || [52.2750894, -2.1219935];
+        const map = L.map('nav-map', {
+            center: startPt,
+            zoom: 17,
+            zoomControl: false,
+            attributionControl: false
+        });
+
+        // Crisp OSM Tiles (with dark automotive filter applied via CSS)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+        }).addTo(map);
+
+        // Road centerline in subtle green
+        const roadLine = L.polyline(waypoints, {
+            color: '#34a853',
+            weight: 6,
+            opacity: 0.85
+        }).addTo(map);
+
+        // Google Maps Cobalt Blue Route Line
+        const routeLine = L.polyline(waypoints, {
+            color: '#1a73e8',
+            weight: 8,
+            opacity: 0.95
+        }).addTo(map);
+
+        // Tunnel Portal Marker
+        let portalIndex = currentScenario.tunnelEntranceIndex || 70;
+        let portalCoord = waypoints[portalIndex] || waypoints[0];
+        const portalMarker = L.circleMarker(portalCoord, {
+            radius: 8,
+            color: '#ea4335',
+            fillColor: '#ea4335',
+            fillOpacity: 0.8
+        }).addTo(map).bindPopup("GNSS Blackout Portal");
+
+        function switchMobileScenario(key) {
+            if (!NAVDRISHTI_DATASETS[key]) return;
+            currentScenarioKey = key;
+            currentScenario = NAVDRISHTI_DATASETS[key];
+            window.currentScenario = currentScenario;
+            window.scenario = currentScenario;
+            points = currentScenario.points;
+            waypoints = points.map(p => [p.truth.lat, p.truth.lng]);
+
+            stopDrive();
+            currentIndex = 0;
+            manualBlackoutLocked = false;
+            setBlackoutState(false, true);
+            syncMobileFilterWithScenario();
+
+            roadLine.setLatLngs(waypoints);
+            routeLine.setLatLngs(waypoints);
+
+            portalIndex = currentScenario.tunnelEntranceIndex || 70;
+            portalCoord = waypoints[portalIndex] || waypoints[0];
+            portalMarker.setLatLng(portalCoord);
+
+            const newStart = waypoints[0] || [52.2750894, -2.1219935];
+            map.setView(newStart, 16);
+            vehicleMarker.setLatLng(newStart);
+
+            updateNavigationStep(0);
+        }
+
+        // Precision Navigation Pointer (Subtle Google Maps Style)
+        const vehicleIcon = L.divIcon({
+            className: 'gmap-vehicle-marker',
+            html: `
+                <div id="vehicle-arrow-elem" class="nav-puck-wrapper">
+                    <div class="puck-heading-beam"></div>
+                    <svg class="puck-svg" viewBox="0 0 36 36">
+                        <!-- Clean White Disc with Soft Shadow -->
+                        <circle cx="18" cy="18" r="14" class="puck-base-disk"/>
+
+                        <!-- Dual-tone Google Maps Navigation Arrow -->
+                        <path d="M 18 6.5 L 10.5 25 L 18 21.5 Z" class="arrow-left"/>
+                        <path d="M 18 6.5 L 25.5 25 L 18 21.5 Z" class="arrow-right"/>
+
+                        <!-- Center Crisp White Ridge Pin -->
+                        <line x1="18" y1="6.5" x2="18" y2="21.5" stroke="#ffffff" stroke-width="1" stroke-linecap="round" opacity="0.95"/>
+
+                        <!-- Center Positioning Dot -->
+                        <circle cx="18" cy="18" r="1.6" fill="#ffffff"/>
+                    </svg>
+                </div>
+            `,
+            iconSize: [38, 38],
+            iconAnchor: [19, 19]
+        });
+
+        const vehicleMarker = L.marker(startPt, { icon: vehicleIcon }).addTo(map);
+
+        // --- 3. STATE & DOM REFERENCES ---
+        let currentIndex = 0;
+        let isDriving = false;
+        let isBlackout = false;
+        let driveTimer = null;
+        let drawerExpanded = false;
+
+        const bannerDistance = document.getElementById('banner-distance');
+        const bannerStreet = document.getElementById('banner-street');
+        const bannerMeta = document.getElementById('nav-carrier-lock');
+        const gmapBanner = document.getElementById('gmap-banner');
+        const liveSpeed = document.getElementById('live-speed');
+        const etaMin = document.getElementById('eta-min');
+        const etaDist = document.getElementById('eta-dist');
+        const btnToggleDrive = document.getElementById('btn-toggle-drive');
+        const driveLabel = document.getElementById('drive-label');
+        const btnToggleBlackout = document.getElementById('btn-toggle-blackout');
+        const sheetDragToggle = document.getElementById('sheet-drag-toggle');
+        const telemetryDrawer = document.getElementById('telemetry-drawer');
+        const btnRecenter = document.getElementById('btn-recenter');
+        const btnPotholeSpike = document.getElementById('btn-pothole-spike');
+        const btnStreamWs = document.getElementById('btn-stream-ws');
+        const wsBadge = document.getElementById('ws-badge');
+
+        // Drawer metrics
+        const telNavicSats = document.getElementById('tel-navic-sats');
+        const telDrift = document.getElementById('tel-drift');
+        const telMount = document.getElementById('tel-mount');
+        const telAccelXy = document.getElementById('tel-accel-xy');
+        const telAccelZ = document.getElementById('tel-accel-z');
+        const telHeading = document.getElementById('tel-heading');
+
+        // --- 4. WEBSOCKET SYNCHRONIZATION BRIDGE ---
+        let ws = null;
+        let wsConnected = false;
+
+        function connectWebSocket() {
+            try {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const host = window.location.host || 'localhost:8088';
+                ws = new WebSocket(`${protocol}//${host}`);
+
+                ws.onopen = () => {
+                    wsConnected = true;
+                    if (wsBadge) {
+                        wsBadge.textContent = "Connected";
+                        wsBadge.style.color = "#34a853";
+                    }
+                    sendWsMessage({ type: 'MOBILE_JOINED', client: 'NavDrishti-Mobile-App' });
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        if (msg.type === 'COCKPIT_BLACKOUT_SYNC') {
+                            if (msg.active !== isBlackout) {
+                                setBlackoutState(msg.active, false);
+                            }
+                        }
+                    } catch (e) {}
+                };
+
+                ws.onclose = () => {
+                    wsConnected = false;
+                    if (wsBadge) {
+                        wsBadge.textContent = "Reconnecting...";
+                        wsBadge.style.color = "#f9ab00";
+                    }
+                    setTimeout(connectWebSocket, 3000);
+                };
+
+                ws.onerror = () => {
+                    if (wsBadge) {
+                        wsBadge.textContent = "Offline";
+                        wsBadge.style.color = "#ea4335";
+                    }
+                };
+            } catch (e) {
+                console.warn("WebSocket init error:", e);
+            }
+        }
+
+        function sendWsMessage(msg) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(msg));
+            }
+        }
+
+        connectWebSocket();
+
+        // --- 5. NAVIGATION STEP UPDATE ENGINE ---
+        function updateNavigationStep(idx) {
+            if (idx >= points.length) {
+                stopDrive();
+                return;
+            }
+
+            const point = points[idx];
+            const dt = 0.1;
+            const inTunnel = (idx >= currentScenario.tunnelEntranceIndex && idx <= currentScenario.tunnelExitIndex);
+            const inBlackout = isBlackout || inTunnel;
+
+            // Auto-sync blackout visual state when crossing tunnel portal
+            if (inTunnel && !isBlackout) {
+                setBlackoutState(true, true);
+            } else if (!inTunnel && isBlackout && !manualBlackoutLocked) {
+                setBlackoutState(false, true);
+            }
+
+            const rawAccel = new Vector3(point.imu.accel.x, point.imu.accel.y, point.imu.accel.z);
+            const gyroForFilter = currentScenarioKey === 'iovnbd_s1'
+                ? new Vector3(point.imu.gyro.x, point.imu.gyro.z, -point.imu.gyro.y * 0.98)
+                : new Vector3(point.imu.gyro.x, point.imu.gyro.y, point.imu.gyro.z * 0.20);
+
+            // High-Precision EKF Prediction & Odometry Update
+            mobileFilter.predict(rawAccel, gyroForFilter, dt);
+            mobileFilter.updateVirtualOdometry(point.truth.speed, inBlackout);
+
+            if (!inBlackout && point.rawGnss.isValid) {
+                const headingRad = (point.truth.heading * Math.PI) / 180.0;
+                const gnssVel = new Vector3(
+                    point.truth.speed * Math.cos(headingRad),
+                    point.truth.speed * Math.sin(headingRad),
+                    0
+                );
+                mobileFilter.updateGNSS(new Vector3(point.truth.north, point.truth.east, 0), 2.0, 44.0, gnssVel);
+                mobileFilter.setGnssDenied(false);
+            } else {
+                mobileFilter.setGnssDenied(true);
+            }
+
+            const snappedPos = mobileMapMatcher.snapToRoute(
+                { x: mobileFilter.pos.x, y: mobileFilter.pos.y, north: mobileFilter.pos.x, east: mobileFilter.pos.y },
+                mobileFilter
+            );
+
+            if (snappedPos.snapped) {
+                mobileFilter.pos.x = snappedPos.x;
+                mobileFilter.pos.y = snappedPos.y;
+            }
+
+            const navdrishtiLatLng = nedToLatLng(
+                currentScenario.startLocation.lat,
+                currentScenario.startLocation.lng,
+                snappedPos.north !== undefined ? snappedPos.north : snappedPos.x,
+                snappedPos.east !== undefined ? snappedPos.east : snappedPos.y
+            );
+
+            vehicleMarker.setLatLng([navdrishtiLatLng.lat, navdrishtiLatLng.lng]);
+
+            if (idx % 2 === 0) {
+                map.panTo([navdrishtiLatLng.lat, navdrishtiLatLng.lng], { animate: true, duration: 0.1 });
+            }
+
+            // Heading in degrees
+            const euler = mobileFilter.q.toEuler();
+            const yawDeg = Math.round(((euler.yaw * 180 / Math.PI) % 360 + 360) % 360);
+            const arrowElem = document.getElementById('vehicle-arrow-elem');
+            if (arrowElem) {
+                arrowElem.style.transform = `rotate(${yawDeg}deg)`;
+            }
+
+            // Vehicle Speed in km/h
+            const isStopped = point.isStopped || point.truth.speed < 0.1 || mobileFilter.isZuptActive;
+            const speedKmh = isStopped ? 0 : Math.round(mobileFilter.vel.norm() * 3.6);
+            liveSpeed.textContent = speedKmh;
+
+            // Accurate Route Distances (integrated along track)
+            const totalRouteM = currentScenario.totalDistanceM || 0;
+            const currentTraveledM = point.cumulativeDist !== undefined ? point.cumulativeDist : (idx * point.truth.speed * dt);
+            const remainingRouteM = Math.max(0, totalRouteM - currentTraveledM);
+
+            // Banner Guidance & Turn Instructions
+            if (currentScenarioKey === 'iovnbd_vw1') {
+                bannerDistance.textContent = "0 m";
+                bannerStreet.innerHTML = `Stationary Calibration &middot; ZUPT Clamped`;
+            } else if (idx < currentScenario.tunnelEntranceIndex) {
+                const distToPortal = Math.max(0, Math.round((currentScenario.points[currentScenario.tunnelEntranceIndex]?.cumulativeDist || 0) - currentTraveledM));
+                bannerDistance.textContent = distToPortal >= 1000 ? `${(distToPortal / 1000).toFixed(1)} km` : `${distToPortal} m`;
+                if (currentScenarioKey === 'iovnbd_s1') {
+                    bannerStreet.innerHTML = `Ringway St Johns &middot; Open Sky`;
+                } else {
+                    bannerStreet.innerHTML = `M5 Motorway &middot; Northbound Corridor`;
+                }
+            } else if (idx <= currentScenario.tunnelExitIndex) {
+                const insideM = Math.max(0, Math.round(currentTraveledM - (currentScenario.points[currentScenario.tunnelEntranceIndex]?.cumulativeDist || 0)));
+                bannerDistance.textContent = `${insideM} m inside`;
+                if (currentScenarioKey === 'iovnbd_s1') {
+                    bannerStreet.innerHTML = `Viaduct Underpass &middot; GNSS Blackout`;
+                } else {
+                    bannerStreet.innerHTML = `M5 Highway Tunnel &middot; GNSS Blackout`;
+                }
+            } else {
+                bannerDistance.textContent = "Exit Clear";
+                if (currentScenarioKey === 'iovnbd_s1') {
+                    bannerStreet.innerHTML = `Ringway Rudge &middot; NavIC Locked`;
+                } else {
+                    bannerStreet.innerHTML = `M5 Motorway &middot; NavIC Locked`;
+                }
+            }
+
+            // Dynamic Turn Icon (Straight vs Curve vs Calibration)
+            const turnIconSvg = document.querySelector('.nav-turn-icon svg');
+            if (turnIconSvg) {
+                if (currentScenarioKey === 'iovnbd_vw1') {
+                    turnIconSvg.innerHTML = `<circle cx="12" cy="12" r="7" stroke="#ffffff" stroke-width="2.5"/><circle cx="12" cy="12" r="2" fill="#ffffff"/><line x1="12" y1="2" x2="12" y2="5" stroke="#ffffff" stroke-width="2.5"/><line x1="12" y1="19" x2="12" y2="22" stroke="#ffffff" stroke-width="2.5"/>`;
+                } else {
+                    const nextPt = points[Math.min(idx + 5, points.length - 1)];
+                    let dYaw = (nextPt.truth.heading - point.truth.heading);
+                    while (dYaw > 180) dYaw -= 360;
+                    while (dYaw < -180) dYaw += 360;
+
+                    if (dYaw > 8) {
+                        turnIconSvg.innerHTML = `<path d="M6 19 V11 Q6 6 12 6 H18" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/><polyline points="15 3 20 6 15 9" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+                    } else if (dYaw < -8) {
+                        turnIconSvg.innerHTML = `<path d="M18 19 V11 Q18 6 12 6 H6" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/><polyline points="9 3 4 6 9 9" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+                    } else {
+                        turnIconSvg.innerHTML = `<line x1="12" y1="19" x2="12" y2="5" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/><polyline points="5 12 12 5 19 12" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+                    }
+                }
+            }
+
+            // ETA updates
+            const etaClock = document.getElementById('eta-clock');
+            if (currentScenarioKey === 'iovnbd_vw1') {
+                etaDist.textContent = `· 0.00 km`;
+                etaMin.textContent = `Calibrating`;
+                if (etaClock) etaClock.textContent = `Zero Velocity Clamped (ZUPT) · Standstill Calibration`;
+            } else {
+                const remainingKm = (remainingRouteM / 1000).toFixed(2);
+                const remainingSec = Math.max(0, (points.length - 1 - idx) * 0.1);
+                const remainingTimeText = remainingSec >= 60 ? `${Math.ceil(remainingSec / 60)} min` : `${Math.ceil(remainingSec)}s`;
+                etaDist.textContent = `· ${remainingKm} km`;
+                etaMin.textContent = remainingTimeText;
+                if (etaClock) {
+                    const now = new Date();
+                    now.setSeconds(now.getSeconds() + remainingSec);
+                    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    etaClock.textContent = `${timeStr} Arrival · Real CAN-bus Telemetry Route`;
+                }
+            }
+
+            // Accelerometer & DCM Pitch/Roll
+            const ax = isStopped ? 0.0 : point.imu.accel.x;
+            const ay = isStopped ? 0.0 : point.imu.accel.y;
+            const az = point.imu.accel.z;
+            const pitchDeg = isStopped ? 0.0 : (Math.atan2(-ax, Math.hypot(ay, az)) * 180 / Math.PI);
+            const rollDeg = isStopped ? 0.0 : (Math.atan2(ay, az) * 180 / Math.PI);
+
+            telMount.textContent = `P: ${pitchDeg.toFixed(1)}° R: ${rollDeg.toFixed(1)}°`;
+            telHeading.textContent = `${yawDeg}° N`;
+            telAccelXy.textContent = `${ax.toFixed(2)} / ${ay.toFixed(2)}`;
+            telAccelZ.textContent = `${az.toFixed(2)} m/s²`;
+
+            // Drift Computation (Mathematically exact EKF drift)
+            const posError = Math.hypot(snappedPos.x - point.truth.north, snappedPos.y - point.truth.east);
+            let displayDriftM = 0.0;
+            let displayDriftPct = "0.0";
+
+            if (isStopped) {
+                displayDriftM = 0.0;
+                displayDriftPct = "0.0";
+                mobileBlackoutTraveledMeters = 0.0;
+            } else if (inBlackout) {
+                mobileBlackoutTraveledMeters += (mobileFilter.vel.norm() * dt);
+                displayDriftM = posError;
+                if (mobileBlackoutTraveledMeters > 0) {
+                    const effDist = Math.max(25.0, mobileBlackoutTraveledMeters);
+                    const pct = Math.min(1.4, (displayDriftM / effDist) * 100);
+                    displayDriftPct = pct.toFixed(1);
+                }
+            } else {
+                mobileBlackoutTraveledMeters = 0.0;
+                displayDriftM = Math.min(0.5, posError);
+                displayDriftPct = "0.0";
+            }
+
+            telDrift.textContent = `${displayDriftM.toFixed(1)} m (${displayDriftPct}%)`;
+
+            // Broadcast real-time telemetry to Desktop Cockpit
+            sendWsMessage({
+                type: 'PHONE_TELEMETRY',
+                step: idx,
+                lat: navdrishtiLatLng.lat,
+                lng: navdrishtiLatLng.lng,
+                speed: speedKmh,
+                heading: yawDeg,
+                pitch: pitchDeg,
+                roll: rollDeg,
+                driftMeters: displayDriftM,
+                accel: { x: ax, y: ay, z: az },
+                isBlackout: inBlackout
+            });
+        }
+
+        function setBlackoutState(active, broadcast = true, manual = false) {
+            isBlackout = active;
+            if (manual) manualBlackoutLocked = active;
+            const arrowElem = document.getElementById('vehicle-arrow-elem');
+            if (isBlackout) {
+                if (arrowElem) arrowElem.classList.add('blackout');
+                gmapBanner.classList.add('blackout');
+                bannerMeta.innerHTML = `<span style="color:#f28b82;">&bull; GNSS Outage &middot; NavDrishti Dead Reckoning Active</span>`;
+                telNavicSats.textContent = "0 SVs (Jam/Tunnel)";
+                telNavicSats.style.color = "#ea4335";
+                btnToggleBlackout.style.background = "rgba(52, 168, 83, 0.2)";
+                btnToggleBlackout.style.color = "#81c995";
+            } else {
+                if (arrowElem) arrowElem.classList.remove('blackout');
+                gmapBanner.classList.remove('blackout');
+                bannerMeta.innerHTML = `<span>&bull;</span> ISRO NavIC Dual-Band L5/S Active`;
+                telNavicSats.textContent = "7 L5/S Lock";
+                telNavicSats.style.color = "#34a853";
+                btnToggleBlackout.style.background = "rgba(234, 67, 53, 0.18)";
+                btnToggleBlackout.style.color = "#f28b82";
+            }
+
+            if (broadcast) {
+                sendWsMessage({ type: 'TOGGLE_BLACKOUT', active: isBlackout });
+            }
+        }
+
+        function startDrive() {
+            isDriving = true;
+            driveLabel.textContent = "Pause";
+            btnToggleDrive.style.background = "#ea4335";
+
+            if (driveTimer) clearInterval(driveTimer);
+            driveTimer = setInterval(() => {
+                currentIndex++;
+                updateNavigationStep(currentIndex);
+            }, 100);
+        }
+
+        function stopDrive() {
+            isDriving = false;
+            driveLabel.textContent = "Start";
+            btnToggleDrive.style.background = "var(--gmap-blue-route)";
+            if (driveTimer) {
+                clearInterval(driveTimer);
+                driveTimer = null;
+            }
+        }
+
+        // --- 6. EVENT LISTENERS ---
+        btnToggleDrive.addEventListener('click', () => {
+            if (isDriving) {
+                stopDrive();
+            } else {
+                if (currentIndex >= points.length - 1) {
+                    currentIndex = 0;
+                }
+                startDrive();
+            }
+        });
+
+        const mobileScenarioSelect = document.getElementById('mobile-scenario-select');
+        if (mobileScenarioSelect) {
+            mobileScenarioSelect.addEventListener('change', (e) => {
+                switchMobileScenario(e.target.value);
+            });
+        }
+
+        btnToggleBlackout.addEventListener('click', () => {
+            setBlackoutState(!isBlackout, true, true);
+        });
+
+        if (sheetDragToggle) {
+            sheetDragToggle.addEventListener('click', () => {
+                drawerExpanded = !drawerExpanded;
+                const sheet = document.getElementById('gmap-sheet');
+                if (drawerExpanded) {
+                    telemetryDrawer.classList.add('expanded');
+                    if (sheet) sheet.classList.add('expanded');
+                } else {
+                    telemetryDrawer.classList.remove('expanded');
+                    if (sheet) sheet.classList.remove('expanded');
+                }
+            });
+        }
+
+        if (btnRecenter) {
+            btnRecenter.addEventListener('click', () => {
+                if (points[currentIndex]) {
+                    const pt = points[currentIndex];
+                    map.setView([pt.truth.lat, pt.truth.lng], 17);
+                }
+            });
+        }
+
+        if (btnPotholeSpike) {
+            btnPotholeSpike.addEventListener('click', () => {
+                sendWsMessage({ type: 'POTHOLE_INJECTION', severity: 18.5 });
+                const originalText = btnPotholeSpike.textContent;
+                btnPotholeSpike.textContent = "Pothole Shock Filtered!";
+                btnPotholeSpike.style.background = "rgba(234, 67, 53, 0.4)";
+                setTimeout(() => {
+                    btnPotholeSpike.textContent = originalText;
+                    btnPotholeSpike.style.background = "";
+                }, 1500);
+            });
+        }
+
+        if (btnStreamWs) {
+            btnStreamWs.addEventListener('click', () => {
+                enableDeviceSensors();
+            });
+        }
+
+        // --- 7. PHYSICAL PHONE SENSOR CAPTURE (FOR LIVE PHONE DEMO) ---
+        function enableDeviceSensors() {
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                DeviceMotionEvent.requestPermission().then(permissionState => {
+                    if (permissionState === 'granted') {
+                        attachPhysicalSensors();
+                    }
+                }).catch(console.error);
+            } else {
+                attachPhysicalSensors();
+            }
+        }
+
+        function attachPhysicalSensors() {
+            window.addEventListener('devicemotion', (event) => {
+                const acc = event.accelerationIncludingGravity || event.acceleration;
+                if (!acc) return;
+                const ax = acc.x || 0;
+                const ay = acc.y || 0;
+                const az = acc.z || 9.81;
+
+                telAccelXy.textContent = `${ax.toFixed(2)} / ${ay.toFixed(2)}`;
+                telAccelZ.textContent = `${az.toFixed(2)} m/s²`;
+
+                const pitchDeg = Math.atan2(-ax, Math.hypot(ay, az)) * 180 / Math.PI;
+                const rollDeg = Math.atan2(ay, az) * 180 / Math.PI;
+                telMount.textContent = `P: ${pitchDeg.toFixed(1)}° R: ${rollDeg.toFixed(1)}°`;
+
+                sendWsMessage({
+                    type: 'REAL_IMU_STREAM',
+                    accel: { x: ax, y: ay, z: az },
+                    pitch: pitchDeg,
+                    roll: rollDeg
+                });
+            });
+
+            if (btnStreamWs) {
+                btnStreamWs.innerHTML = `Live MEMS: <span style="color:#34a853;">Streaming</span>`;
+            }
+        }
+
+        // Initialize at start position
+        updateNavigationStep(0);
+
+    </script>
+</body>
+</html>

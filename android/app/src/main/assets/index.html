@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NavDrishti - Seamless Navigation Everywhere</title>
+    
+    <!-- Clean, Modern Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet Map CSS (Offline Vendor Copy for Reliable Venue Showcase) -->
+    <link rel="stylesheet" href="vendor/leaflet.css">
+    <link rel="icon" type="image/png" href="assets/logo.png">
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app-container">
+        
+        <!-- ==================================================================
+             HEADER: CLEAN & PURPOSEFUL AVIONICS CONTROLS
+             ================================================================== -->
+        <header class="top-nav">
+            <div class="brand-section">
+                <img src="assets/logo.png" alt="NavDrishti Official Logo" class="brand-logo-img">
+                <div class="brand-titles">
+                    <h1>NavDrishti <span class="brand-badge">ISRO &middot; SIH 2026</span></h1>
+                    <p class="brand-sub">Uninterrupted vehicle navigation through tunnels, basements, and cities</p>
+                </div>
+            </div>
+
+            <!-- Controls: Clean, Simple, Direct -->
+            <div class="nav-actions">
+                <!-- Vehicle Selector -->
+                <div class="select-field">
+                    <span class="field-label">Vehicle</span>
+                    <select id="vehicle-select" aria-label="Select Vehicle Type">
+                        <option value="car">Car / SUV</option>
+                        <option value="twowheeler">Motorcycle / Scooter</option>
+                        <option value="truck">Truck / Bus</option>
+                        <option value="rover">Delivery Rover</option>
+                    </select>
+                </div>
+
+                <!-- Scenario Selector -->
+                <div class="select-field">
+                    <span class="field-label">Route</span>
+                    <select id="scenario-select" aria-label="Select Navigation Scenario">
+                        <option value="iovnbd_vw13" selected>🇬🇧 IO-VNBD M5 Motorway (115 km/h Cruise)</option>
+                        <option value="iovnbd_s1">🇬🇧 IO-VNBD Coventry Ring Road (Track S1 - Roundabouts)</option>
+                        <option value="iovnbd_vw1">🇬🇧 IO-VNBD Stationary ZUPT (Track Vw1 - Calibration)</option>
+                        <option value="import">📂 Import GPX / NMEA Vehicle Log</option>
+                    </select>
+                    <input type="file" id="route-file-input" accept=".gpx,.nmea,.txt,.log" style="display:none;">
+                </div>
+
+                <!-- Playback Buttons -->
+                <div class="button-group">
+                    <button id="btn-play" class="btn btn-primary" title="Start / Pause Drive [Space]">
+                        <span id="play-icon" style="display:flex; align-items:center;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </span>
+                        <span id="play-text">Start Drive</span>
+                    </button>
+                    <button id="btn-reset" class="btn btn-secondary" title="Reset Simulation [R]">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                        <span>Reset</span>
+                    </button>
+                    <button id="btn-speed" class="btn btn-secondary" title="Toggle Speed">
+                        <span id="speed-text">1.0x</span>
+                    </button>
+                </div>
+
+                <!-- Satellite Cut Switch -->
+                <div class="satellite-toggle-card" id="jamming-card">
+                    <div class="toggle-text">
+                        <span class="toggle-title">Simulate Satellite Loss</span>
+                        <span class="toggle-subtitle">Tunnel or jammed signal [B]</span>
+                    </div>
+                    <label class="clean-switch">
+                        <input type="checkbox" id="toggle-jamming" aria-label="Toggle GNSS Jamming Simulation">
+                        <span class="switch-track"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Connection Status -->
+            <div class="header-status">
+                <div id="filter-state-badge" class="status-pill status-connected">
+                    <span class="status-dot"></span>
+                    <span id="filter-state-text">NavIC Satellites Connected</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ==================================================================
+             MAIN DASHBOARD: CALM, SORTED THREE-COLUMN BENTO GRID
+             ================================================================== -->
+        <main class="main-layout">
+            
+            <!-- LEFT COLUMN: Vehicle Speed & Position Health -->
+            <aside class="sidebar-column">
+                
+                <!-- Speed & Distance Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Vehicle Dynamics</h2>
+                        <span class="card-tag" id="vehicle-type-label">Car</span>
+                    </div>
+                    <div class="speedometer-box">
+                        <div class="speed-main-display">
+                            <div class="speed-number">
+                                <span id="val-speed">0</span>
+                                <span class="speed-unit">km/h</span>
+                            </div>
+                            <span class="badge-calm" id="val-accel-badge">+0.0 m/s&sup2;</span>
+                        </div>
+                        <!-- Real-time Speed Progress Bar -->
+                        <div class="speed-bar-track">
+                            <div id="speed-bar-fill" class="speed-bar-fill"></div>
+                        </div>
+                        <div class="distance-line">
+                            <span>Distance Traveled</span>
+                            <b id="val-distance">0.00 km</b>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accuracy Comparison Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Position Accuracy</h2>
+                        <span class="card-tag">Real-Time Drift</span>
+                    </div>
+                    <div class="comparison-summary">
+                        <div class="accuracy-row navdrishti-row">
+                            <div class="row-label">
+                                <span class="dot-indicator dot-cyan"></span>
+                                <div>
+                                    <div class="row-title">NavDrishti Accuracy</div>
+                                    <div class="row-desc">Centered on highway track</div>
+                                </div>
+                            </div>
+                            <div class="row-value">
+                                <span id="val-drift">0.0 m</span>
+                                <span class="row-sub" id="val-drift-pct">0.0% drift</span>
+                            </div>
+                        </div>
+
+                        <div class="accuracy-row gps-row">
+                            <div class="row-label">
+                                <span class="dot-indicator dot-red"></span>
+                                <div>
+                                    <div class="row-title">Standard Phone GPS</div>
+                                    <div class="row-desc" id="gps-status-desc">Normal signal reception</div>
+                                </div>
+                            </div>
+                            <div class="row-value">
+                                <span id="val-gps-error">2.1 m</span>
+                                <span class="row-sub" id="gps-drift-label">GPS error</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phone Alignment & Tilt Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Phone Mount Attitude</h2>
+                        <span class="badge-calm">Auto-Calibrated</span>
+                    </div>
+                    <div class="tilt-section">
+                        <div class="tilt-bar-item">
+                            <span class="tilt-label">Pitch (Incline)</span>
+                            <span class="tilt-value" id="val-pitch">0.0&deg;</span>
+                        </div>
+                        <div class="tilt-bar-item">
+                            <span class="tilt-label">Roll (Lean)</span>
+                            <span class="tilt-value" id="val-roll">0.0&deg;</span>
+                        </div>
+                        <div class="tilt-bar-item">
+                            <span class="tilt-label">Heading (Yaw)</span>
+                            <span class="tilt-value" id="val-yaw">0&deg;</span>
+                        </div>
+                    </div>
+
+                    <!-- Mini Artificial Horizon -->
+                    <div class="horizon-visual-box" title="Virtual Inclinometer">
+                        <div id="horizon-line" class="horizon-center-line"></div>
+                        <div class="horizon-crosshair"></div>
+                    </div>
+                    <p class="card-caption">Virtual DCM automatically aligns arbitrary dashboard phone placement to vehicle forward axis.</p>
+                </div>
+
+            </aside>
+
+            <!-- CENTER COLUMN: The Navigation Map (Tactical Hero View) -->
+            <section class="map-column">
+                <div class="map-card">
+                    <div id="map"></div>
+
+                    <!-- Clean Floating Legend -->
+                    <div class="floating-legend">
+                        <div class="legend-item">
+                            <span class="line-swatch line-cyan"></span>
+                            <span>NavDrishti (EKF Fusion)</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="line-swatch line-red"></span>
+                            <span>Standard GPS (Drifting)</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="line-swatch line-green"></span>
+                            <span>Actual Path</span>
+                        </div>
+                    </div>
+
+                    <!-- Clean, Calm Status Alert (Only shows when satellite is lost) -->
+                    <div id="tunnel-alert" class="clean-alert-bar" style="display:none;">
+                        <span class="alert-icon">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        </span>
+                        <div class="alert-content">
+                            <b id="alert-title">Satellite Signal Lost - Tunnel Blackout</b>
+                            <span id="alert-desc">NavDrishti is guiding the vehicle using internal motion sensors and road contours.</span>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Simulation Timeline Scrubber -->
+                    <div class="map-timeline-bar">
+                        <span id="timeline-time" class="timeline-label">0.0s / 0.0s</span>
+                        <input type="range" id="timeline-slider" class="timeline-slider" min="0" max="100" value="0" aria-label="Route Simulation Progress Scrubber">
+                        <span id="timeline-dist" class="timeline-label">0.00 km</span>
+                    </div>
+
+                    <!-- Route Drawing Hint -->
+                    <div id="custom-route-instructions" class="route-hint-bar" style="display:none;">
+                        <span><span class="badge-calm">CUSTOM ROUTE</span> Tap 3 to 4 points on the road to set your driving path, then press <b>Start Drive</b>.</span>
+                    </div>
+
+                    <!-- File Import Hint -->
+                    <div id="import-route-instructions" class="route-hint-bar" style="display:none; cursor:pointer;">
+                        <span><span class="badge-calm">IMPORT</span> Select a <b>.gpx</b> or <b>.nmea</b> track log to replay with NavDrishti.</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- RIGHT COLUMN: Satellite Health & Smart Driving Safeguards -->
+            <aside class="sidebar-column">
+                
+                <!-- Satellite Coverage (NavIC) -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Indian Satellite Coverage</h2>
+                        <span class="card-tag">NavIC L5 / S Band</span>
+                    </div>
+                    <div class="satellites-overview">
+                        <div class="sat-count-box">
+                            <span class="sat-big-number" id="val-sats">4</span>
+                            <span class="sat-count-desc">Active NavIC Satellites in View</span>
+                        </div>
+                        <div class="sat-clean-list" id="sat-list-container">
+                            <!-- Populated cleanly via JS with live SNR bars -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Smart Driving Safeguards -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Smart Road Safeguards</h2>
+                        <span class="badge-calm">Active</span>
+                    </div>
+                    <div class="safeguards-list">
+                        
+                        <div class="safeguard-item">
+                            <div class="safeguard-text">
+                                <b>Non-Holonomic Constraints (NHC)</b>
+                                <span>Zero lateral slip &amp; realistic steering</span>
+                            </div>
+                            <span id="badge-nhc" class="tag-status tag-active">Active</span>
+                        </div>
+
+                        <div class="safeguard-item">
+                            <div class="safeguard-text">
+                                <b>Zero Velocity Update (ZUPT)</b>
+                                <span>Clamps drift at red lights &amp; stops</span>
+                            </div>
+                            <span id="badge-zupt" class="tag-status tag-standby">Standby</span>
+                        </div>
+
+                        <div class="safeguard-item">
+                            <div class="safeguard-text">
+                                <b>Pothole &amp; Shock Filter</b>
+                                <span>Mahalanobis outlier rejection on Z-axis</span>
+                            </div>
+                            <span id="badge-pothole" class="tag-status tag-active">Smoothing</span>
+                        </div>
+
+                        <div class="safeguard-item">
+                            <div class="safeguard-text">
+                                <b>Road Contour Snapping</b>
+                                <span>HMM topology corridor constraints</span>
+                            </div>
+                            <span class="tag-status tag-active">Active</span>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Clean Verification Summary with ISRO Target Gauge -->
+                <div class="card card-muted">
+                    <div class="card-header">
+                        <h2>ISRO Benchmark Compliance</h2>
+                        <span class="badge-calm" id="badge-isro-compliance">PASS (&lt;1.5%)</span>
+                    </div>
+                    <div class="benchmark-gauge-box">
+                        <div class="gauge-track">
+                            <div class="gauge-zone-pass"></div>
+                            <div class="gauge-zone-fail"></div>
+                        </div>
+                        <div class="gauge-markers">
+                            <span>0.0% (Ideal)</span>
+                            <span>&le; 2.0% (ISRO Target)</span>
+                            <span>5.0%+</span>
+                        </div>
+                    </div>
+                    <p class="summary-text" id="isro-summary-text" style="margin-top: 6px;">
+                        Over <b>380 m of M5 tunnel blackout at 115 km/h</b>, standard GPS drifts <b>70+ meters</b> away. NavDrishti holds trajectory within <b>0.6% drift (2.3 m)</b>.
+                    </p>
+                </div>
+
+            </aside>
+        </main>
+
+        <!-- ==================================================================
+             FOOTER: HIGH-DENSITY AVIONICS TICKER
+             ================================================================== -->
+        <footer class="bottom-bar">
+            <div class="bottom-group">
+                <span>System: <b id="tick-sys-status">Normal Navigation</b></span>
+                <span class="sep">&bull;</span>
+                <span>Coordinates: <b id="tick-pos">52.2751&deg; N, -2.1220&deg; W</b></span>
+            </div>
+            <div class="bottom-group">
+                <span>Sensor Rate: <b>100 Hz (Every 10ms)</b></span>
+                <span class="sep">&bull;</span>
+                <span style="color:#60a5fa;">Powered by ISRO NavIC</span>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- Leaflet JS (Offline Vendor Copy for Reliable Venue Showcase) -->
+    <script src="vendor/leaflet.js"></script>
+    
+    <!-- Application Scripts -->
+    <script src="js/engine.js"></script>
+    <script src="js/dataset.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

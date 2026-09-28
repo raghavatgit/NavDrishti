@@ -1,0 +1,8 @@
+.gradle/
+build/
+__pycache__/
+*.pyc
+*.apk
+*.pptx
+*.pdf
+*.log

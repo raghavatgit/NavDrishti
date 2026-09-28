@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NAVDRISHTI</string>
+    <string name="app_tagline">ISRO NavIC Intelligent Dead Reckoning</string>
+    
+    <!-- Status Badges -->
+    <string name="status_standby">STANDBY - SENSORS READY</string>
+    <string name="status_navic_locked">NAVIC L5/S DUAL-BAND LOCK</string>
+    <string name="status_tunnel_active">GNSS BLACKOUT - IDR ACTIVE</string>
+    
+    <!-- Metrics -->
+    <string name="speed_unit">km/h</string>
+    <string name="initial_speed">0.0</string>
+    <string name="heading_label">HEADING</string>
+    <string name="attitude_label">ATTITUDE</string>
+    <string name="navic_sats_label">NAVIC SATELLITES</string>
+    <string name="drift_label">ESTIMATED DRIFT</string>
+    
+    <!-- Buttons -->
+    <string name="btn_start_engine">START 100Hz EKF SERVICE</string>
+    <string name="btn_stop_engine">STOP EKF SERVICE</string>
+    <string name="btn_simulate_blackout">TRIGGER TUNNEL BLACKOUT</string>
+    <string name="btn_restore_gnss">RESTORE NAVIC SIGNAL</string>
+    <string name="btn_calibrate_imu">CALIBRATE MOUNT</string>
+</resources>
