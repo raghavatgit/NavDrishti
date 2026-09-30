@@ -1,0 +1,3 @@
+# Pin numpy, scipy, and opencv-python-headless to exact stable releases
+
+Specification and operational parameters for NavDrishti.
