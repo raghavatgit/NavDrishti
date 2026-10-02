@@ -1,0 +1,2 @@
+# Pin scikit-learn, open3d, and pywavelets to stable releases
+# Specification and parameters for NavDrishti
